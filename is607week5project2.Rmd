@@ -1,0 +1,201 @@
+---
+title: "is607Project2"
+output: pdf_document
+---
+
+The puprpose of this data profile is to introduce an important problem in algorithmic trading.  
+
+Is it better to trade smaller but more frequently to reduce the price impact cost associated with wider bid-ask spreads in periods of lower liquidity OR is it better to trade larger to minimize fees paid to brokers and regulatory agencies?
+
+
+Problem 1: 
+
+I chose a dataset that contains 3,472 observations of 16 variables.  The dataset is a day's worth of algorithmic stock trading.  This file contains multiple types of numerical columns (prices, quantities), categorial columns (sub accounts) and character columns (stock symbols).
+
+
+```{r}
+library(plyr)
+library(tidyr)
+library(reshape2)
+library(ggplot2)
+setwd("~/Downloads")
+file <- read.csv("account-summary-MRTTRADING1-20140930.csv")
+head(file)
+tail(file)
+```
+
+Problem 2: 
+
+First, I will rename the columns using easier names.  
+
+```{r}
+file.df <- data.frame(file)
+colnames(file.df) <- c("Account", "Security", "ID", "TradeDate", "TradeTime", "Side", "Liquidity", "Route", "Quantity", "Price", "LimeFee", "ECNFee", "ACTFee", "SECFee", "NASDFee", "RoundedOrderComm")
+head(file.df)
+```
+
+Each trade is an observation.  As such, we can summarize how many trades were made in each symbol. 
+
+```{r}
+trades.per.sym <- count(file.df$Security)
+head(trades.per.sym)
+tail(trades.per.sym)
+colnames(trades.per.sym) <- c("Symbol", "NumberOfTrades")
+trades.per.symdf <- data.frame(trades.per.sym)
+```
+
+The symbol in which the most trades were made today was the stock GDX which was traded 925 times.  
+
+```{r}
+trades.per.symdf[which(trades.per.symdf$NumberOfTrades == max(trades.per.symdf$NumberOfTrades)),]
+```
+The symbols in which the least trades were made today were the stocks AMGN, APD, AZO, CMI, GD, IBM, LNC, ROP, SIAL, WHR each with just 1 trade. 
+
+```{r}
+trades.per.symdf[which(trades.per.symdf$NumberOfTrades == min(trades.per.symdf$NumberOfTrades)),]
+```
+
+The average price of each of the 118 unique stock symbols traded is summarized below. 
+
+```{r}
+library(ggplot2)
+sym.price <- data.frame(file.df$Security,file.df$Price)
+colnames(sym.price) <- c("Sym", "Price")
+summary.symprice <- ddply(sym.price, .(Sym), summarize, avg=mean(Price))
+head(summary.symprice)
+tail(summary.symprice)
+summary.symprice.df <- data.frame(summary.symprice)
+colnames(summary.symprice.df) <- c("Sym", "Price")
+avg.price.persym <- ggplot(summary.symprice.df,aes(Sym, Price))+geom_point() + labs(title = "Average Price per Symbol", x = "Average Price", y = "Sym")
+avg.price.persym
+```
+
+The most expensive stock traded was AZO.  The average price traded of AZO was 509.68 dollars and can easily be identified as the outlier in the scatter plot above.  
+
+```{r}
+
+summary.symprice.df[which(summary.symprice.df$Price == max(summary.symprice.df$Price)),]
+
+
+```
+
+The average price per share of stock traded was $72.00
+
+```{r}
+avg.px.alldf <- data.frame(mean(summary.symprice.df$Price))
+colnames(avg.px.alldf) <- c("AvgPricePerShare")
+avg.px.alldf
+
+```
+
+Interestingly, all trades traded were on the same date between 15:58:35 and 15:59:58.  Furthermore, the scatter plot below shows that before 15:58:48 every trade is 100 shares in size.  
+
+Over the next 10 seconds between 15:58:48 and 15:58:58 the algorithm starts to trade in more varied quantities.  For instance at 15:58:52 there are 7 trades below 25 shares a clip.  In the last 3 seconds of trading, most of the day's volume is created.  
+
+At 15:59:57 in particular the algorithm trades a wide variety of quantity sizes ranging from a just one share per trade to 100 shares per trade.  In fact within that 1 second of time there are 13 trades of less than 25 shares each and 12 trades of between 25 and 50 shares each.  
+
+At 15:59:57 there are a total 25 trades of 50 shares or less as compared with 0 trades of 50 shares or less at 15:58:48.
+
+This behavioral pattern could be attributed to rapidly changing liquidity dynamics and should be an area of further research.  Some important questions include, 
+
+"Is there a greater impact cost of larger trade sizes after 15:59:57 or is there a greater impact cost of larger trade sizes prior to 15:58:48?"
+
+"How does market liquidity over each interval of time affect the transaction cost in terms of average bid-ask spreads of stocks?"
+
+
+```{r}
+all.qty <- file.df$Quantity
+all.time <- file.df$TradeTime
+all.qty.timedf <- data.frame(file.df$Quantity,file.df$TradeTime)
+colnames(all.qty.timedf) <- c("Qty", "TradeTime")
+head(all.qty.timedf)
+tail(all.qty.timedf)
+qty.vs.time <- ggplot(all.qty.timedf, aes(x = Qty, y = TradeTime))+geom_point(aes(size = Qty))+scale_size_continuous(range = c(1,5))+labs(title = "QtyTraded Over Time", x = "Qty Traded (Shares)", y = "Trade Time")
+qty.vs.time
+
+```
+
+There are 5 fees that are paid for each trade made.  Those fees include a brokerage fee, an ECN fee, an ACT fee, an SEC fee and an NASD fee. 
+
+The total fees paid for the trades in this data set was $720.4062 for a total of 333,535 shares traded.
+
+The total fees per share paid was $0.002159912 per share traded.  
+
+```{r}
+comm.df <- data.frame(file.df$LimeFee, file.df$ECNFee, file.df$ACTFee, file.df$SECFee, file.df$NASDFee)
+colnames(comm.df) <- c("BrokerFee", "ECNFee", "ACTFee", "SECFee", "NASDFee")
+all.qty.time.fee.df <- data.frame(all.qty.timedf, comm.df)
+total.fees.paid <- data.frame(sum(comm.df))
+colnames(total.fees.paid) <- c("TotalFeesPaid")
+sum.qty <- data.frame(sum(all.qty))
+colnames(sum.qty) <- c("TotalSharesTraded")
+sum.qty
+total.fees.paid
+fees.per.share <- data.frame((total.fees.paid/sum.qty))
+colnames(fees.per.share) <- c("Fees Per Share Paid")
+fees.per.share
+fee.time.qtydf <- data.frame(all.qty.time.fee.df$Qty, all.qty.time.fee.df$TradeTime,(all.qty.time.fee.df$BrokerFee+all.qty.time.fee.df$ECNFee+all.qty.time.fee.df$SECFee+all.qty.time.fee.df$NASDFee))
+colnames(fee.time.qtydf) <- c("Qty", "TradeTime", "Fee")
+head(fee.time.qtydf)
+tail(fee.time.qtydf)
+time.qty.fee.plot <- ggplot(fee.time.qtydf, aes(x = Fee, y = TradeTime))+geom_point(aes(size = Qty)) + scale_size_continuous(range = c(1,5))+labs(title = "Fees Paid Over Time as a Function of Qty Traded", x = "Fee", y = "Trade Time")
+time.qty.fee.plot
+```
+
+From the scatter plot above we can clearly see that the majority of fees paid were paid within the last one minute of trading after 15:58:58.
+
+The average trade size is 96.06423 shares.  The min trade size is 1 share and the max trade size is 100 shares.  
+
+Interestingly, the average qty traded drops to 76.70769 shares per trade at 15:59:58 from 100 shares average per trade at 15:58:57 and increases back to 99.21886 shares per trade on average at 16:00:00.  At 15:59:57 the average fees paid peaks at $0.37608 per share traded.  
+
+A correlation analysis shows that a weak inverse relationship between average quantity per trade over each time interval.  This can be interpreted as the smaller the average share size per trade the higher the average fees paid.  The reason for this may be due to the fact that some of the components that constitute the fee are based on the number of trades made rather than the number of shares traded.  That is, the SEC Fee for example will be the same whether the trade size is 1 share or 100 shares.  Therefore executing many small trades will drive the part of the fee component higher.  
+
+Other parts of the fee component, such as brokerage commissions, are charged on a per share basis.  
+
+```{r}
+
+avg.tradesize <- data.frame(mean(fee.time.qtydf$Qty))
+colnames(avg.tradesize) <- c("Average Trade Size (Shares)")
+avg.tradesize
+max.tradesize <- data.frame(max(fee.time.qtydf$Qty))
+colnames(max.tradesize) <- c("Max Trade Size")
+max.tradesize
+min.tradesize <- data.frame(min(fee.time.qtydf$Qty))
+colnames(min.tradesize) <- c("Min Trade Size")
+min.tradesize
+summary.tradesize <- ddply(fee.time.qtydf, .(TradeTime), summarize, AvgQtyByTimePeriod=mean(Qty))
+summary.tradesize
+summary.fee <- ddply(fee.time.qtydf, .(TradeTime), summarize, AvgFeeByTimePeriod = mean(Fee))
+summary.fee
+avg.fee.tradesize.byintervaldf <- data.frame(summary.tradesize$AvgQtyByTimePeriod, summary.fee$AvgFeeByTimePeriod)
+colnames(avg.fee.tradesize.byintervaldf) <- c("AvgQty", "AvgFee")
+avg.fee.tradesize.byintervaldf
+cor((avg.fee.tradesize.byintervaldf$AvgQty), (avg.fee.tradesize.byintervaldf$AvgFee))
+```
+
+
+As such, one must weigh the costs and benefits of trading larger to minimize fees paid versus trading smaller to minimize the bid-ask spread paid as a function of illiquidity over various time intervals throughout the day. Liqidity analysis to measure impact cost is beyond the scope of this project but is a logical next step.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
